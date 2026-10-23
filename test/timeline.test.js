@@ -12,6 +12,13 @@ import {
   MAX_SCALE,
 } from '../app/js/timeline.js';
 
+test('home order: sigh first, relax last', () => {
+  assert.deepEqual(
+    PROGRAMS.map((p) => p.id),
+    ['sigh', 'unwind', 'restore', 'focus', 'balance', 'energize', 'relax'],
+  );
+});
+
 test('every program has the expected pattern', () => {
   const patterns = Object.fromEntries(PROGRAMS.map((p) => [p.id, patternLabel(p)]));
   assert.deepEqual(patterns, {
@@ -34,7 +41,7 @@ test('physiological sigh: two nasal inhales, exhale twice as long as inhales', (
   const inhale = sigh.phases.filter((p) => p.type.startsWith('in')).reduce((s, p) => s + p.dur, 0);
   const exhale = sigh.phases.find((p) => p.type === 'out').dur;
   assert.equal(exhale, inhale * 2);
-  assert.equal(sigh.defaultMinutes, 5);
+  assert.equal(sigh.defaultMinutes, 3);
 });
 
 test('every cycle ends on an exhale or an empty-lung hold', () => {

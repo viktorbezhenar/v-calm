@@ -2,7 +2,7 @@
  * Bump VERSION on every release — that is what makes phones pick up the update.
  * test/sw-assets.test.js fails if a file in app/ is missing from ASSETS. */
 
-const VERSION = '0.1.0';
+const VERSION = '0.2.0';
 const CACHE = `vcalm-${VERSION}`;
 
 const ASSETS = [
@@ -14,6 +14,7 @@ const ASSETS = [
   '/js/timeline.js',
   '/js/streaks.js',
   '/js/audio.js',
+  '/js/wav.js',
   '/js/session.js',
   '/js/storage.js',
   '/js/wakelock.js',

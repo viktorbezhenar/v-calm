@@ -1,25 +1,36 @@
 import { PROGRAMS, DURATIONS, PHASE_LABELS, getProgram, patternLabel } from './programs.js';
-import { formatClock } from './timeline.js';
+import { buildTimeline, formatClock } from './timeline.js';
 import { addPractice, computeStats, MIN_SECONDS } from './streaks.js';
-import { createAudio, preferPlaybackSession } from './audio.js';
+import { renderSession, preferPlaybackSession, LEAD_IN } from './audio.js';
+import { silentWav } from './wav.js';
 import { runSession } from './session.js';
 import { load, save, requestPersistence } from './storage.js';
 import { keepAwake, allowSleep } from './wakelock.js';
 import { createShimmer } from './shimmer.js';
 
-export const VERSION = '0.1.0';
+export const VERSION = '0.2.0';
 
 /** Orb diameter at full inhale, as a fraction of the stage (matches CSS inset). */
 const ORB_FRACTION = 0.88;
 /** Sessions shorter than this (ended early) are treated as accidental and not logged. */
 const MIN_LOGGED_SECONDS = 15;
+/** After a completed session, the screen fades to black after this long (bedtime use). */
+const SLEEP_FADE_MS = 5000;
 
 const $ = (id) => document.getElementById(id);
 
 const store = load();
 let openId = null;
-/** @type {null | { session: ReturnType<typeof runSession>, audio: any, program: any, minutes: number }} */
+/** @type {null | { session: ReturnType<typeof runSession>, withAudio: boolean, program: any, minutes: number }} */
 let active = null;
+let starting = false;
+let swapping = false;
+let sleepTimer = 0;
+
+/** One <audio> element for every session: iOS keeps it playing on the lock screen. */
+const player = $('player');
+const silentUrl = URL.createObjectURL(new Blob([silentWav()], { type: 'audio/wav' }));
+let sessionUrl = null;
 /** @type {null | { program: any, minutes: number }} */
 let lastPlayed = null;
 
@@ -168,27 +179,25 @@ function toggle(id) {
 
 /* ---------- session ---------- */
 
-function unlockAudio() {
-  preferPlaybackSession();
-  try {
-    const audio = createAudio();
-    audio.setVolume(store.volume);
-    // iOS: start the context inside the tap and play one silent frame.
-    audio.ctx.resume();
-    const buf = audio.ctx.createBuffer(1, 1, 22050);
-    const src = audio.ctx.createBufferSource();
-    src.buffer = buf;
-    src.connect(audio.ctx.destination);
-    src.start(0);
-    return audio;
-  } catch {
-    return null;
-  }
+function setSource(blob) {
+  if (sessionUrl) URL.revokeObjectURL(sessionUrl);
+  sessionUrl = URL.createObjectURL(blob);
+  player.src = sessionUrl;
+  player.load();
 }
 
-function start(program, minutes) {
-  if (active) return;
-  const audio = unlockAudio();
+const once = (el, type) => new Promise((resolve) => el.addEventListener(type, resolve, { once: true }));
+
+async function start(program, minutes) {
+  if (active || starting) return;
+  starting = true;
+  cancelSleep();
+
+  // iOS: unlock the media element synchronously inside the tap; it stays
+  // allowed to play once the real session audio is ready.
+  preferPlaybackSession();
+  player.src = silentUrl;
+  const unlocked = player.play().catch(() => {});
 
   store.last = { programId: program.id, minutes };
   store.minutesByProgram = { ...store.minutesByProgram, [program.id]: minutes };
@@ -198,24 +207,94 @@ function start(program, minutes) {
   const screen = $('session');
   paint(screen, program);
   screen.dataset.phase = 'lead';
-  screen.classList.remove('paused');
-  $('paused').hidden = true;
+  setPausedUI(false);
+  lastText = {};
   $('s-name').textContent = program.name;
   $('volume').value = String(store.volume);
-  $('stage').setAttribute('aria-label', 'Pause');
-  lastText = {};
+  $('orb').style.transform = 'scale(0.42)';
+  setText('cue-label', 'Get ready');
+  setText('cue-sub', 'Preparing sounds…');
+  setText('cue-count', '');
+  setText('s-remaining', '');
   show('session');
   keepAwake();
   shimmer.start();
 
+  const timeline = buildTimeline(program, minutes);
+  let withAudio = true;
+  try {
+    await unlocked;
+    setSource(await renderSession(timeline, { volume: store.volume }));
+  } catch {
+    withAudio = false; // no Web Audio rendering available: run silently
+  }
+
+  setupMediaSession(program, minutes);
   const session = runSession({
     program,
     minutes,
-    audio,
+    player: withAudio ? player : null,
     onFrame: (state) => renderFrame(program, state),
+    onPauseChange: (paused) => !swapping && setPausedUI(paused),
     onEnd: (result) => end(result),
   });
-  active = { session, audio, program, minutes };
+  active = { session, withAudio, program, minutes };
+  store.pending = { programId: program.id, total: timeline.total, startedAt: Date.now() };
+  save(store);
+  starting = false;
+}
+
+/** Volume is baked into the rendered file (iOS ignores <audio>.volume): re-render and resume in place. */
+async function applyVolume() {
+  save(store);
+  if (!active?.withAudio) return;
+  const { timeline } = active.session;
+  const blob = await renderSession(timeline, { volume: store.volume });
+  if (!active) return;
+  const at = player.currentTime;
+  const wasPlaying = !player.paused;
+  swapping = true;
+  setSource(blob);
+  await once(player, 'loadedmetadata');
+  player.currentTime = at;
+  if (wasPlaying) await player.play().catch(() => {});
+  swapping = false;
+}
+
+/** Lock-screen / Control Center "Now Playing" with play, pause and stop. */
+function setupMediaSession(program, minutes) {
+  if (!('mediaSession' in navigator)) return;
+  const ms = navigator.mediaSession;
+  try {
+    ms.metadata = new MediaMetadata({
+      title: `${program.name} · ${minutes} min`,
+      artist: 'V-Calm',
+      album: program.technique,
+      artwork: [{ src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' }],
+    });
+  } catch {
+    /* MediaMetadata unsupported */
+  }
+  const handlers = {
+    play: () => active?.session.resume(),
+    pause: () => active?.session.pause(),
+    stop: () => active?.session.stop(),
+    seekbackward: null,
+    seekforward: null,
+    previoustrack: null,
+    nexttrack: null,
+  };
+  for (const [action, fn] of Object.entries(handlers)) {
+    try {
+      ms.setActionHandler(action, fn);
+    } catch {
+      /* action unsupported on this platform */
+    }
+  }
+}
+
+function clearMediaSession() {
+  if ('mediaSession' in navigator) navigator.mediaSession.metadata = null;
 }
 
 let lastText = {};
@@ -226,6 +305,7 @@ function setText(id, text) {
 }
 
 function renderFrame(program, state) {
+  if (swapping) return;
   const orb = $('orb');
   orb.style.transform = `scale(${state.scale.toFixed(4)})`;
   $('glow').style.opacity = String(((state.scale - 0.42) / 0.58) * 0.55 + 0.15);
@@ -249,24 +329,26 @@ function renderFrame(program, state) {
 
 function togglePause() {
   if (!active) return;
-  const { session } = active;
-  if (session.paused) session.resume();
-  else session.pause();
-  const paused = session.paused;
+  if (active.session.paused) active.session.resume();
+  else active.session.pause();
+}
+
+function setPausedUI(paused) {
   $('session').classList.toggle('paused', paused);
   $('paused').hidden = !paused;
   $('stage').setAttribute('aria-label', paused ? 'Resume' : 'Pause');
 }
 
 function end(result) {
-  allowSleep();
+  allowSleep(); // let iOS Auto-Lock take over straight away
   shimmer.stop();
-  const { audio, program } = active;
+  clearMediaSession();
+  const { program } = active;
   active = null;
-  // Let the closing bowl ring out, then release the audio context.
-  if (audio && audio.ctx.state !== 'closed') setTimeout(() => audio.ctx.close().catch(() => {}), 7000);
+  delete store.pending;
 
   if (!result.completed && result.seconds < MIN_LOGGED_SECONDS) {
+    save(store);
     renderHome();
     show('home');
     return;
@@ -278,6 +360,28 @@ function end(result) {
   requestPersistence();
   renderDone(program, result, before, computeStats(store.days));
   show('done');
+  if (result.completed) sleepTimer = setTimeout(() => ($('sleep').hidden = false), SLEEP_FADE_MS);
+}
+
+/* ---------- bedtime: fade to black after a completed session ---------- */
+
+function cancelSleep() {
+  clearTimeout(sleepTimer);
+  $('sleep').hidden = true;
+}
+
+/**
+ * A session that was still running when the page was killed in the
+ * background (possible on a long locked-screen session) is credited on the
+ * next launch, so the streak survives.
+ */
+function recoverPending() {
+  const p = store.pending;
+  if (!p) return;
+  delete store.pending;
+  const seconds = Math.min(p.total, (Date.now() - p.startedAt) / 1000 - LEAD_IN);
+  if (seconds >= MIN_LOGGED_SECONDS) store.days = addPractice(store.days, new Date(p.startedAt), seconds);
+  save(store);
 }
 
 /* ---------- done ---------- */
@@ -313,12 +417,12 @@ $('repeat').addEventListener('click', () => {
 $('stage').addEventListener('click', togglePause);
 $('session-close').addEventListener('click', () => active?.session.stop());
 $('volume').addEventListener('input', (e) => {
-  const v = Number(e.target.value);
-  active?.audio?.setVolume(v);
-  store.volume = v;
+  store.volume = Number(e.target.value);
 });
-$('volume').addEventListener('change', () => save(store));
+$('volume').addEventListener('change', () => applyVolume());
+$('sleep').addEventListener('click', cancelSleep);
 $('done-home').addEventListener('click', () => {
+  cancelSleep();
   renderHome();
   show('home');
 });
@@ -326,9 +430,13 @@ $('done-again').addEventListener('click', () => {
   if (lastPlayed) start(lastPlayed.program, lastPlayed.minutes);
 });
 
-// Leaving the app (switching apps, locking the phone) pauses the session.
+// Locking the phone keeps the session going (audio continues on the lock
+// screen). Coming back catches up on a session that ended meanwhile.
+// Without audio there is nothing to follow, so the silent fallback pauses.
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'hidden' && active && !active.session.paused) togglePause();
+  if (!active) return;
+  if (document.visibilityState === 'visible') active.session.sync();
+  else if (!active.withAudio && !active.session.paused) active.session.pause();
 });
 window.addEventListener('resize', () => shimmer.resize());
 
@@ -336,6 +444,7 @@ window.addEventListener('resize', () => shimmer.resize());
 const deepLink = new URLSearchParams(location.search).get('p');
 if (deepLink && getProgram(deepLink)) openId = deepLink;
 
+recoverPending();
 renderHome();
 
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {

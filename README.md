@@ -24,22 +24,24 @@ I used a small breathing web app every day for months until its server was hacke
 - **Sessions finish the breath**: the timer rounds up to whole cycles, so you never stop mid-inhale
 - **Streaks** (a day counts after 2+ min of practice), longest streak, total minutes
 - **Offline** after the first visit; **installable** to the iOS/Android home screen
-- **iPhone details handled**: plays with the silent switch on (Audio Session API), keeps the screen awake (Wake Lock), pauses automatically when you leave the app
+- **Lock your phone, keep breathing**: the session plays on through a locked screen, with play/pause/stop on the lock screen
+- **Bedtime-friendly**: when a session ends, the screen fades to black and the phone can auto-lock
+- **iPhone details handled**: plays with the silent switch on, keeps the screen awake while you watch
 - **Private by design**: no cookies, no analytics, no third-party requests, strict CSP
 
 ## Programs
 
 | Program  | Technique            | Pattern (seconds)              | Good for                |
 | -------- | -------------------- | ------------------------------ | ----------------------- |
-| Relax    | Extended exhale      | in 4 · out 6                   | Stress relief           |
-| Balance  | Equal breathing      | in 4 · hold 2 · out 4          | Becoming present        |
+| Sigh     | Physiological sigh   | in 2 · top-up in 1 · out 6     | Lifting mood, calming   |
+| Unwind   | Relaxing breath      | in 4 · hold 7 · out 8          | Winding down (advanced) |
 | Restore  | Deep belly breathing | in 5 · out 5                   | Energy, ~6 breaths/min  |
 | Focus    | Box breathing        | in 4 · hold 4 · out 4 · hold 4 | Concentration           |
+| Balance  | Equal breathing      | in 4 · hold 2 · out 4          | Becoming present        |
 | Energize | Energizing breath    | in 4 · out 2                   | Alertness (advanced)    |
-| Unwind   | Relaxing breath      | in 4 · hold 7 · out 8          | Winding down (advanced) |
-| Sigh     | Physiological sigh   | in 2 · top-up in 1 · out 6     | Calming down fast       |
+| Relax    | Extended exhale      | in 4 · out 6                   | Stress relief           |
 
-The **physiological (cyclic) sigh** follows the protocol in [Balban et al., 2023, _Cell Reports Medicine_](https://pmc.ncbi.nlm.nih.gov/articles/PMC9873947/): two inhales through the nose (the second a short top-up), then a slow, full exhale through the mouth, 5 minutes a day. The study prescribes no counts; 2-1-6 keeps the exhale twice as long as the inhales.
+The **physiological (cyclic) sigh** follows the protocol in [Balban et al., 2023, _Cell Reports Medicine_](https://pmc.ncbi.nlm.nih.gov/articles/PMC9873947/): two inhales through the nose (the second a short top-up), then a slow, full exhale through the mouth. Practised 5 minutes a day for a month, it improved positive mood more than mindfulness meditation. The study prescribes no counts; 2-1-6 keeps the exhale twice as long as the inhales.
 
 > V-Calm is a relaxation tool, not medical advice. Stop if you feel light-headed.
 
@@ -74,8 +76,9 @@ app/                    ← deployed as-is (no build step)
     programs.js         the seven programs (data)
     timeline.js         pure timing engine: program + minutes → timed segments
     streaks.js          pure streak maths over per-day practice
-    session.js          runs a session on the AudioContext clock
-    audio.js            synthesised bell / chime / bowl
+    session.js          runs a session on the <audio> element's clock
+    audio.js            synthesised bell / chime / bowl, rendered offline
+    wav.js              tiny WAV encoder
     main.js             UI wiring
     storage.js, wakelock.js, shimmer.js
   sw.js                 service worker: precache, cache-first, offline
@@ -84,8 +87,8 @@ docker/nginx.conf       same headers for self-hosting
 test/                   node:test suites
 ```
 
-- **One clock.** Sound and animation both read the Web Audio clock, so they stay locked together for the whole session. Pause suspends the AudioContext.
-- **Sounds are code.** Each cue is a few sine partials with exponential decay, sized to the phase length (the exhale bowl rings for the full exhale). No audio files.
+- **Sounds are code.** Each cue is a few sine partials with exponential decay, sized to the phase length (the exhale bowl rings for the full exhale). No audio files are shipped.
+- **Rendered, then played.** iOS mutes live Web Audio on a locked screen, so one breathing cycle is rendered offline (a few hundred ms), stitched into a WAV for the whole session, and played by an `<audio>` element, which keeps going when locked. Its playback position is the one clock for sound and animation.
 - **Data** lives in `localStorage` under `vcalm:v1` on your device. Nothing is sent anywhere.
 
 ## Releasing

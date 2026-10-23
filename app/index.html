@@ -75,6 +75,7 @@
       </div>
 
       <div class="paused-hint" id="paused" hidden>Paused · tap the circle to continue</div>
+      <p class="lock-hint">You can lock your phone. The sounds keep guiding you.</p>
 
       <div class="volume">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9z" /></svg>
@@ -120,5 +121,12 @@
         <button type="button" class="btn" id="done-home">Done</button>
       </div>
     </section>
+
+    <!-- Bedtime: after a completed session the screen fades to black. -->
+    <div id="sleep" class="sleep" hidden role="button" tabindex="0" aria-label="Wake screen">
+      <span>Sleep well · tap to wake</span>
+    </div>
+
+    <audio id="player" preload="auto"></audio>
   </body>
 </html>

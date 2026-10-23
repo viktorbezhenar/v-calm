@@ -5,6 +5,22 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) · Versioning: 
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-23
+
+### Added
+
+- Sessions keep running on a locked screen: each session is rendered into one audio file and played by an `<audio>` element, which iOS keeps playing when locked.
+- Lock-screen / Control Center controls (Media Session): play, pause and stop, with the program name.
+- Bedtime: the screen wake lock is released the moment a session ends, and 5 s after a completed session the screen fades to black (tap to wake) until iOS Auto-Lock turns it off.
+- A session interrupted because iOS killed the app in the background is credited to the streak on next launch.
+
+### Changed
+
+- Home order: Sigh, Unwind, Restore, Focus, Balance, Energize, Relax.
+- Sigh defaults to 3 min; copy now says it lifts mood (Balban et al., 2023).
+- Volume changes apply when the slider is released (the file is re-rendered in place).
+- Leaving the app no longer pauses the session.
+
 ## [0.1.0] - 2026-10-23
 
 ### Added

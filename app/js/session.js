@@ -1,55 +1,36 @@
 /**
- * Runs one breathing session: drives the clock, schedules sounds a little
- * ahead of time and reports animation frames to the UI.
+ * Runs one breathing session against a clock and reports animation frames.
  *
- * The AudioContext clock is the single source of truth for both sound and
- * animation, so they stay in sync for long sessions. Pausing suspends the
- * AudioContext, which freezes that clock.
+ * Normally the clock is the <audio> element playing the rendered session
+ * (its currentTime is the single source of truth for sound and animation, and
+ * it keeps running on a locked screen). Without audio, a performance.now()
+ * clock with the same interface is used.
  */
 import { buildTimeline, stateAt } from './timeline.js';
-
-const LEAD_IN = 2; // seconds of "Get ready" before the first inhale
-const LOOKAHEAD = 1.0; // schedule sounds this far ahead (s)
+import { LEAD_IN } from './audio.js';
 
 /**
  * @param {object} opts
  * @param {import('./programs.js').Program} opts.program
  * @param {number} opts.minutes
- * @param {ReturnType<import('./audio.js').createAudio> | null} opts.audio
- * @param {(state: ReturnType<typeof stateAt>, timeline: ReturnType<typeof buildTimeline>) => void} opts.onFrame
+ * @param {HTMLAudioElement | null} opts.player  already loaded with the rendered session
+ * @param {(state: ReturnType<typeof stateAt>) => void} opts.onFrame
+ * @param {(paused: boolean) => void} opts.onPauseChange
  * @param {(result: { completed: boolean, seconds: number }) => void} opts.onEnd
  */
-export function runSession({ program, minutes, audio, onFrame, onEnd }) {
+export function runSession({ program, minutes, player, onFrame, onPauseChange, onEnd }) {
   const timeline = buildTimeline(program, minutes);
-  const clock = audio ? audioClock(audio.ctx) : perfClock();
-  const t0 = clock.now() + LEAD_IN;
+  const clock = player ? mediaClock(player) : perfClock();
 
-  let scheduled = 0; // index of next segment to schedule a sound for
   let raf = 0;
-  let timer = 0;
-  let paused = false;
   let ended = false;
 
-  const elapsed = () => clock.now() - t0;
-
-  function schedule() {
-    if (!audio || paused || scheduled === -1) return;
-    const horizon = elapsed() + LOOKAHEAD;
-    while (scheduled < timeline.segments.length && timeline.segments[scheduled].start <= horizon) {
-      const seg = timeline.segments[scheduled];
-      audio.cue(seg.type, t0 + seg.start, seg.dur);
-      scheduled++;
-    }
-    if (scheduled === timeline.segments.length && timeline.total <= horizon) {
-      audio.end(t0 + timeline.total);
-      scheduled = -1; // sentinel: everything scheduled
-    }
-  }
+  const elapsed = () => clock.now() - LEAD_IN;
 
   function frame() {
-    const t = elapsed();
-    const state = stateAt(timeline, t);
-    onFrame(state, timeline);
+    if (ended) return;
+    const state = stateAt(timeline, elapsed());
+    onFrame(state);
     if (state.status === 'done') {
       finish(true, timeline.total);
       return;
@@ -61,74 +42,98 @@ export function runSession({ program, minutes, audio, onFrame, onEnd }) {
     if (ended) return;
     ended = true;
     cancelAnimationFrame(raf);
-    clearInterval(timer);
-    onEnd({ completed, seconds: Math.max(0, seconds) });
+    clock.detach();
+    onEnd({ completed, seconds: Math.max(0, Math.min(timeline.total, seconds)) });
   }
 
-  schedule();
-  timer = setInterval(schedule, 200);
+  // Pauses can come from the lock screen / Control Center, not just the UI.
+  clock.onPauseChange((paused) => {
+    if (!ended) onPauseChange(paused);
+  });
+  clock.onEnded(() => finish(true, timeline.total));
+
+  clock.start();
   raf = requestAnimationFrame(frame);
 
   return {
     timeline,
     get paused() {
-      return paused;
+      return clock.paused;
     },
-    pause() {
-      if (paused || ended) return;
-      paused = true;
-      clock.pause();
-    },
-    resume() {
-      if (!paused || ended) return;
-      paused = false;
-      clock.resume();
-    },
-    /** User ended early (✕). */
+    pause: () => clock.pause(),
+    resume: () => clock.resume(),
+    /** User ended early (✕ or lock-screen stop). */
     stop() {
-      const practiced = Math.min(timeline.total, Math.max(0, elapsed()));
-      if (audio && paused) clock.resume();
+      const practiced = elapsed();
+      clock.halt();
       finish(false, practiced);
-      // Silence anything already scheduled.
-      if (audio) silence(audio.ctx);
+    },
+    /** Called when the page becomes visible again: catch up on a session that ended while locked. */
+    sync() {
+      if (!ended && elapsed() >= timeline.total) finish(true, timeline.total);
     },
   };
 }
 
-function audioClock(ctx) {
+/** @param {HTMLAudioElement} el */
+function mediaClock(el) {
+  const listeners = [];
+  const on = (type, fn) => {
+    el.addEventListener(type, fn);
+    listeners.push([type, fn]);
+  };
   return {
-    now: () => ctx.currentTime,
-    pause: () => ctx.suspend(),
-    resume: () => ctx.resume(),
+    now: () => el.currentTime,
+    get paused() {
+      return el.paused;
+    },
+    start: () => el.play().catch(() => {}),
+    pause: () => el.pause(),
+    resume: () => el.play().catch(() => {}),
+    halt: () => el.pause(),
+    onPauseChange(fn) {
+      on('pause', () => !el.ended && fn(true));
+      on('play', () => fn(false));
+    },
+    onEnded(fn) {
+      on('ended', fn);
+    },
+    detach() {
+      for (const [type, fn] of listeners) el.removeEventListener(type, fn);
+    },
   };
 }
 
-/** Fallback clock when Web Audio is unavailable. */
+/** Silent fallback clock (no audio available). */
 function perfClock() {
-  let offset = 0;
-  let pausedAt = null;
   const raw = () => performance.now() / 1000;
+  let offset = raw();
+  let pausedAt = null;
+  let pauseFn = () => {};
   return {
     now: () => (pausedAt ?? raw()) - offset,
-    pause: () => {
-      pausedAt = raw();
+    get paused() {
+      return pausedAt !== null;
     },
-    resume: () => {
-      if (pausedAt !== null) offset += raw() - pausedAt;
-      pausedAt = null;
+    start() {},
+    pause() {
+      if (pausedAt === null) {
+        pausedAt = raw();
+        pauseFn(true);
+      }
     },
+    resume() {
+      if (pausedAt !== null) {
+        offset += raw() - pausedAt;
+        pausedAt = null;
+        pauseFn(false);
+      }
+    },
+    halt() {},
+    onPauseChange(fn) {
+      pauseFn = fn;
+    },
+    onEnded() {},
+    detach() {},
   };
-}
-
-/**
- * Oscillators already scheduled into the future can't be cancelled
- * individually without bookkeeping; briefly suspending and closing the
- * output is simplest. The UI creates a fresh context per session.
- */
-function silence(ctx) {
-  try {
-    ctx.close();
-  } catch {
-    /* already closed */
-  }
 }

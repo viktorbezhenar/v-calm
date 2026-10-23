@@ -1,6 +1,6 @@
 {
   "name": "v-calm",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A calm, offline-first breathing app (PWA). Six classic patterns plus the physiological sigh.",
   "private": true,
   "type": "module",
