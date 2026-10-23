@@ -1,5 +1,5 @@
 # V-Calm: static PWA served by unprivileged nginx (runs as non-root on :8080).
-FROM nginxinc/nginx-unprivileged:1.28-alpine
+FROM nginxinc/nginx-unprivileged:1.31-alpine
 
 LABEL org.opencontainers.image.title="V-Calm" \
       org.opencontainers.image.description="Offline-first breathing app (static PWA)" \
