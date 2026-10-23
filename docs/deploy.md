@@ -1,16 +1,15 @@
 # Deploying V-Calm
 
-Production runs on **Cloudflare Pages (free plan)** at `https://breathe.viktorbezhenar.in.ua`.
-Pages serves `app/` as static files and redeploys on every push to `main`; pull requests get preview URLs.
+V-Calm is a static site: deploy the `app/` folder anywhere that serves files over HTTPS.
+The recommended host is **Cloudflare Pages** (free plan): it applies the security headers in `app/_headers`, redeploys on every push, and builds preview URLs for pull requests.
 
-## One-time setup
+## Cloudflare Pages
 
-### 1. Create the Pages project
+### 1. Create the project
 
-1. Sign in at [dash.cloudflare.com](https://dash.cloudflare.com) (a free account is enough).
-2. **Workers & Pages → Create → Pages → Connect to Git**.
-3. Authorise the Cloudflare GitHub app for the `viktorbezhenar/v-calm` repository only.
-4. Build settings:
+1. In the [Cloudflare dashboard](https://dash.cloudflare.com): **Workers & Pages → Create**, then choose **Pages** (the "Looking to deploy Pages?" link) → **Import an existing Git repository**.
+2. Select your fork of this repository.
+3. Build settings:
 
    | Setting                | Value           |
    | ---------------------- | --------------- |
@@ -19,36 +18,35 @@ Pages serves `app/` as static files and redeploys on every push to `main`; pull 
    | Build command          | _(leave empty)_ |
    | Build output directory | `app`           |
 
-5. **Save and Deploy.** The site goes live at `v-calm.pages.dev` (or similar).
+4. **Save and Deploy.** The site goes live at `<project>.pages.dev`.
 
-### 2. Custom domain (DNS at imena.ua)
+Use **Pages**, not a Worker: a Worker custom domain requires the whole zone on Cloudflare, while Pages accepts a plain CNAME from any DNS provider.
+
+### 2. Custom domain (optional)
 
 The order matters: add the domain in Cloudflare first, then create the DNS record.
 
-1. In the Pages project: **Custom domains → Set up a custom domain** → `breathe.viktorbezhenar.in.ua` → Continue. Cloudflare shows the CNAME target (the `*.pages.dev` hostname).
-2. In the imena.ua control panel → DNS for `viktorbezhenar.in.ua` → add a record:
+1. In the Pages project: **Custom domains → Set up a custom domain** → enter e.g. `breathe.example.com` → **My DNS provider → Begin CNAME setup**.
+2. At your DNS provider, add the record Cloudflare shows:
 
-   | Type  | Name / Host | Value / Target        | TTL     |
-   | ----- | ----------- | --------------------- | ------- |
-   | CNAME | `breathe`   | `<project>.pages.dev` | default |
+   | Type  | Name      | Target                |
+   | ----- | --------- | --------------------- |
+   | CNAME | `breathe` | `<project>.pages.dev` |
 
-3. Back in Cloudflare, wait for the domain to show **Active** (minutes, sometimes up to an hour). Cloudflare issues the HTTPS certificate automatically.
-
-The root site (`viktorbezhenar.in.ua`, GitHub Pages) is untouched; only the `breathe` subdomain points to Cloudflare.
+3. Cloudflare verifies the record (usually within minutes) and issues the HTTPS certificate automatically.
 
 ### 3. Check
 
-- `https://breathe.viktorbezhenar.in.ua` loads with a padlock.
-- Response headers include `Content-Security-Policy` (DevTools → Network → document).
-- On iPhone: Safari → Share → **Add to Home Screen**. Open it from the icon, turn on airplane mode, open it again: it should still work.
+- The site loads over HTTPS and the response includes a `Content-Security-Policy` header (DevTools → Network → document).
+- On a phone: open it in the browser → **Add to Home Screen**. Open it from the icon, switch on airplane mode, and open it again: it should still work.
 
 ## Releases
 
-Push to `main`. Phones get the new version on their next launch after the update has downloaded (the service worker swaps caches when the version in `app/sw.js` changes).
+Push to `main`. Phones get the new version on their next launch after the update has downloaded (the service worker swaps caches when `VERSION` in `app/sw.js` changes).
 
-## The address is permanent
+## Choose the address once
 
-Streaks are stored per web address. Changing the domain later would reset everyone's streak and require reinstalling the home-screen app. If hosting moves (for example to the Docker image), keep `breathe.viktorbezhenar.in.ua` pointing at it.
+Streaks are stored in the browser per web address (origin). Moving to a different domain later resets everyone's streak and requires reinstalling the home-screen app. If you change hosts, keep the same address pointing at the new host.
 
 ## Self-hosting with Docker
 
@@ -56,8 +54,8 @@ Streaks are stored per web address. Changing the domain later would reset everyo
 docker compose up -d --build   # http://127.0.0.1:8080
 ```
 
-The container is nginx (unprivileged image), read-only, with all capabilities dropped and `no-new-privileges`, and it is bound to localhost. Put it behind a TLS-terminating tunnel (Cloudflare Tunnel or `tailscale serve`) for phone use; service workers and home-screen install need HTTPS.
+The container is unprivileged nginx with a read-only filesystem, all capabilities dropped and `no-new-privileges`, bound to localhost. `docker/nginx.conf` mirrors the headers in `app/_headers`. For phone use, put it behind a TLS-terminating proxy or tunnel (e.g. Cloudflare Tunnel, Caddy, `tailscale serve`): service workers and home-screen install require HTTPS.
 
-## Costs
+## Cost
 
-€0: Cloudflare Pages free plan (unlimited static requests and bandwidth, 500 builds/month), GitHub free, and a domain you already own.
+€0 on the Cloudflare Pages free plan (unlimited static requests and bandwidth, 500 builds/month).

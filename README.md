@@ -3,6 +3,8 @@
 **Two taps from your home screen to a calm breath.**
 A tiny, offline-first breathing app (PWA) with six classic patterns and the physiological sigh. No account, no tracking: everything stays on your device.
 
+**Live:** [breathe.viktorbezhenar.in.ua](https://breathe.viktorbezhenar.in.ua): open it on your phone and tap _Add to Home Screen_.
+
 <p align="center">
   <img src="docs/screenshots/home.jpg" width="240" alt="Home screen with the seven breathing programs">
   <img src="docs/screenshots/inhale.jpg" width="240" alt="Session: inhale">
@@ -54,7 +56,7 @@ npm run check      # lint + format check + tests (what CI runs)
 
 ## Deploy
 
-**Production: Cloudflare Pages** (free plan), auto-deployed on every push to `main`. See [`docs/deploy.md`](docs/deploy.md) for the one-time setup and the custom domain (`breathe.viktorbezhenar.in.ua`).
+**Production: Cloudflare Pages** (free plan), auto-deployed on every push to `main`. See [`docs/deploy.md`](docs/deploy.md) for the one-time setup and a custom domain.
 
 **Self-hosting: Docker**, a hardened, read-only, non-root nginx:
 

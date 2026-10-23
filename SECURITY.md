@@ -19,4 +19,4 @@ You'll get a response within 7 days.
 
 ## Supported versions
 
-Only the latest release, the one deployed at `breathe.viktorbezhenar.in.ua`, is supported.
+Only the latest release on `main` is supported.
