@@ -1,0 +1,15 @@
+services:
+  v-calm:
+    build: .
+    image: v-calm:local
+    container_name: v-calm
+    restart: unless-stopped
+    ports:
+      - '127.0.0.1:8080:8080' # localhost only; expose via a TLS tunnel
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/cache/nginx
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true

@@ -1,0 +1,30 @@
+{
+  "name": "v-calm",
+  "version": "0.1.0",
+  "description": "A calm, offline-first breathing app (PWA). Six classic patterns plus the physiological sigh.",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "author": "Viktor Bezhenar",
+  "homepage": "https://breathe.viktorbezhenar.in.ua",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/viktorbezhenar/v-calm.git"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "node scripts/dev-server.mjs",
+    "test": "node --test \"test/**/*.test.js\"",
+    "lint": "eslint . && prettier --check .",
+    "format": "prettier --write .",
+    "check": "npm run lint && npm test"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.13.0",
+    "globals": "^17.13.0",
+    "prettier": "^3.9.10"
+  }
+}

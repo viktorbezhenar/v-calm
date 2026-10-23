@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>V-Calm</title>
+    <meta name="description" content="Quick, calm breathing sessions. Offline, private, no account." />
+    <meta name="theme-color" content="#0d1626" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="V-Calm" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/icons/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <link rel="stylesheet" href="/css/app.css" />
+    <script type="module" src="/js/main.js"></script>
+  </head>
+  <body>
+    <!-- HOME -->
+    <main id="home" class="screen home">
+      <header class="home-head">
+        <div class="brand"><span class="brand-orb" aria-hidden="true"></span>V-Calm</div>
+        <div class="streak-pill" id="streak-pill" aria-live="polite">
+          <svg viewBox="0 0 24 24" aria-hidden="true" class="flame">
+            <path
+              d="M12 2c.6 3.2-1.1 5-2.6 6.8C7.9 10.6 6.5 12.3 6.5 15a5.5 5.5 0 0 0 11 0c0-2.2-1-3.9-2.2-5.2.1 1.6-.5 2.9-1.6 3.5.3-3.9-1-8.3-1.7-11.3z"
+            />
+          </svg>
+          <span id="streak-count">0</span>
+        </div>
+      </header>
+
+      <h1 class="greeting" id="greeting">Take a breath</h1>
+
+      <button type="button" class="repeat" id="repeat" hidden>
+        <span class="repeat-orb" aria-hidden="true"></span>
+        <span class="repeat-text"><span class="repeat-kicker">Repeat last</span><span id="repeat-label"></span></span>
+        <svg viewBox="0 0 24 24" class="repeat-play" aria-hidden="true"><path d="M8 5.5v13l11-6.5z" /></svg>
+      </button>
+
+      <ul class="programs" id="programs"></ul>
+
+      <footer class="home-foot">
+        <p id="stats"></p>
+        <p class="fine">Everything stays on this device · <span id="version"></span></p>
+      </footer>
+    </main>
+
+    <!-- SESSION -->
+    <section id="session" class="screen session" hidden aria-label="Breathing session">
+      <div class="session-top">
+        <button type="button" class="icon-btn" id="session-close" aria-label="End session">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
+        </button>
+        <div class="session-meta">
+          <div id="s-name"></div>
+          <div id="s-remaining" class="s-remaining"></div>
+        </div>
+        <span class="icon-btn-spacer"></span>
+      </div>
+
+      <button type="button" class="stage" id="stage" aria-label="Pause">
+        <span class="glow" id="glow"></span>
+        <span class="ring"></span>
+        <canvas class="shimmer" id="shimmer"></canvas>
+        <span class="orb" id="orb"></span>
+      </button>
+
+      <div class="cue" aria-live="polite">
+        <div class="cue-label" id="cue-label">Get ready</div>
+        <div class="cue-sub" id="cue-sub"></div>
+        <div class="cue-count" id="cue-count"></div>
+      </div>
+
+      <div class="paused-hint" id="paused" hidden>Paused · tap the circle to continue</div>
+
+      <div class="volume">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9z" /></svg>
+        <input type="range" id="volume" min="0" max="1" step="0.01" aria-label="Volume" />
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4 9v6h4l5 4V5L8 9z" />
+          <path d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" />
+        </svg>
+      </div>
+    </section>
+
+    <!-- DONE -->
+    <section id="done" class="screen done" hidden aria-label="Session complete">
+      <div class="done-body">
+        <div class="done-flame" id="done-flame">
+          <svg viewBox="0 0 24 24" aria-hidden="true" class="flame">
+            <path
+              d="M12 2c.6 3.2-1.1 5-2.6 6.8C7.9 10.6 6.5 12.3 6.5 15a5.5 5.5 0 0 0 11 0c0-2.2-1-3.9-2.2-5.2.1 1.6-.5 2.9-1.6 3.5.3-3.9-1-8.3-1.7-11.3z"
+            />
+          </svg>
+        </div>
+        <h2 id="done-title">Well done</h2>
+        <p id="done-summary" class="done-summary"></p>
+        <p id="done-streak" class="done-streak"></p>
+        <p id="done-note" class="done-note"></p>
+        <dl class="done-stats">
+          <div>
+            <dt>Longest</dt>
+            <dd id="done-longest">0</dd>
+          </div>
+          <div>
+            <dt>Total</dt>
+            <dd id="done-total">0</dd>
+          </div>
+          <div>
+            <dt>Sessions</dt>
+            <dd id="done-sessions">0</dd>
+          </div>
+        </dl>
+      </div>
+      <div class="done-actions">
+        <button type="button" class="btn ghost" id="done-again">Again</button>
+        <button type="button" class="btn" id="done-home">Done</button>
+      </div>
+    </section>
+  </body>
+</html>
